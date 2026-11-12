@@ -1,0 +1,46 @@
+// Browser-only API fixtures: NOT mainnet evidence or a live recovery.
+import { chromium } from '@playwright/test';
+import assert from 'node:assert/strict';
+import { EXAMPLES } from '../src/demo.js';
+const browser=await chromium.launch({args:['--no-sandbox']});
+const page=await browser.newPage({viewport:{width:1200,height:950}});
+const address='0x1111111111111111111111111111111111111111',hash='0x'+'a'.repeat(64);
+const snapshot={...EXAMPLES.redeemed,mode:'live',address,blockNumber:123,blockHash:'0x'+'b'.repeat(64),blockTimestamp:Math.floor(Date.now()/1000),checks:{},recognized:true};
+await page.addInitScript(()=>{window.walletRequests=[];window.ethereum={request:async r=>{window.walletRequests.push(r.method);throw Error('Wallet must never be requested in simulation-only browser tests');},on:()=>{},removeListener:()=>{}};});
+await page.route('**/api/inspect/**',r=>r.fulfill({json:snapshot}));
+await page.route('**/api/config',r=>r.fulfill({json:{claimsEnabled:false,reason:'BROWSER TEST FIXTURE: signing disabled.',pins:null}}));
+let expired=false;
+await page.route('**/api/claim/preview/**',r=>r.fulfill({json:{address,eligible:true,simulation:'passed',surplus:'0.01842',hasGas:true,feeBudget:'0.000002',expiresAt:Date.now()+(expired?-1000:60000),note:'BROWSER TEST FIXTURE ONLY'}}));
+let verified=false;
+await page.route('**/api/claim/verify/**',r=>r.fulfill({json:verified?{state:'confirmed',hash,address,payout:'0.01842',surplusAfter:'0',confirmations:2,note:'BROWSER TEST FIXTURE ONLY — no real transaction.'}:{state:'pending',hash,address,note:'BROWSER TEST FIXTURE ONLY — pending.'}}));
+await page.goto('http://127.0.0.1:3000');
+async function openRecovery(){
+ await page.getByRole('button',{name:'Live wallet',exact:true}).click();
+ await page.getByLabel('Public wallet address').fill(address);
+ await page.getByRole('button',{name:'Check wallet',exact:true}).click();
+ await page.getByText('Mainnet snapshot',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Preview recovery',exact:true}).click();
+}
+await openRecovery();
+await page.getByRole('button',{name:'Simulate claim',exact:true}).click();
+await page.getByText('Simulation passed',{exact:true}).waitFor();
+await page.getByLabel('I control the inspected wallet and will verify the contract and network in my wallet.').check();
+await page.getByLabel('I understand this app is unaudited, BTC fees are real, and simulation is not a guarantee.').check();
+assert.equal(await page.getByRole('button',{name:'Signing disabled on this deployment',exact:true}).isDisabled(),true);
+expired=true;
+await page.getByRole('button',{name:'Simulate claim',exact:true}).click();await page.getByText('EXPIRED',{exact:true}).waitFor();
+await page.getByText('Already sent a claim? Track its transaction hash',{exact:true}).click();
+await page.getByLabel('Existing claim transaction hash').fill(hash);
+await page.getByRole('button',{name:'Track this hash',exact:true}).click();
+await page.getByRole('heading',{name:'Track your claim',exact:true}).waitFor();
+assert.ok(await page.evaluate(a=>localStorage.getItem(`compass-pending-31612-${a}`),address));
+await page.reload();await openRecovery();
+await page.getByRole('heading',{name:'Track your claim',exact:true}).waitFor();
+verified=true;await page.getByRole('button',{name:'Check status again',exact:true}).click();
+await page.getByRole('heading',{name:'Claim receipt verified',exact:true}).waitFor();
+assert.equal(await page.evaluate(a=>localStorage.getItem(`compass-pending-31612-${a}`),address),null);
+assert.deepEqual(await page.evaluate(()=>window.walletRequests),[]);
+const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export receipt',exact:true}).click();
+assert.equal((await downloadPromise).suggestedFilename(),'compass-claim-receipt.json');
+console.log('PASS WITH EXPLICIT BROWSER FIXTURES: simulation-only signing lock, expired quote, pending hash persistence/reload, receipt display/export, zero wallet requests. Not a mainnet recovery test.');
+await browser.close();

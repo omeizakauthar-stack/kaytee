@@ -1,0 +1,45 @@
+import { chromium } from '@playwright/test';
+import assert from 'node:assert/strict';
+const browser=await chromium.launch({args:['--no-sandbox']});
+const page=await browser.newPage({viewport:{width:1440,height:1000}});
+const errors=[];page.on('pageerror',e=>errors.push(e.message));
+const wallet='0xa7f5dc5955a599524a28dff21389d88c49dbf738';
+const hash='0xddfed412e19318050b5a693ec27917ef8c9170e5aa0694843480891e95c3cfa7';
+await page.goto('http://127.0.0.1:3000');
+await page.getByRole('button',{name:'Transaction history',exact:true}).click();
+await page.getByRole('heading',{name:'Real records belong to real checks.'}).waitFor();
+await page.getByRole('button',{name:'Live wallet',exact:true}).click();
+await page.getByLabel('Public wallet address').fill(wallet);
+await page.getByRole('button',{name:'Check wallet',exact:true}).click();
+await page.getByText('Mainnet snapshot',{exact:true}).waitFor({timeout:60000});
+await page.getByRole('button',{name:'Transaction history',exact:true}).click();
+await page.getByRole('button',{name:'Search recent records',exact:true}).click();
+await page.locator('.coverage-bar').waitFor({timeout:60000});
+assert.match(await page.locator('.coverage-bar').innerText(),/supported records/);
+const firstCoverage=await page.locator('.coverage-bar').innerText();
+await page.getByRole('button',{name:'Search the previous 5,000 blocks',exact:true}).click();
+await page.waitForFunction(old=>document.querySelector('.coverage-bar')?.textContent!==old,await page.locator('.coverage-bar').textContent(),{timeout:60000});
+assert.notEqual(await page.locator('.coverage-bar').innerText(),firstCoverage);
+await page.getByLabel('Transaction hash').fill('bad-hash');
+await page.getByRole('button',{name:'Check transaction',exact:true}).click();
+await page.getByRole('alert').waitFor();
+await page.getByLabel('Transaction hash').fill(hash);
+await page.getByRole('button',{name:'Check transaction',exact:true}).click();
+await page.getByText('Successful transaction',{exact:true}).waitFor({timeout:60000});
+assert.match(await page.locator('.receipt-result').innerText(),/Redemption update recorded/);
+assert.match(await page.locator('.receipt-result a').first().getAttribute('href'),new RegExp(hash));
+await page.screenshot({path:'screenshots/history-desktop.png',fullPage:true});
+await page.setViewportSize({width:390,height:844});
+await page.screenshot({path:'screenshots/history-mobile.png',fullPage:true});
+assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth>window.innerWidth),false);
+// Explicit failure response must not become a fabricated success or fall back to demo events.
+await page.route('**/api/transaction/**',r=>r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Test provider unavailable; no recovery assumed.'})}));
+await page.getByRole('button',{name:'Check transaction',exact:true}).click();
+await page.getByRole('alert').filter({hasText:'Test provider unavailable'}).waitFor();
+assert.equal(await page.locator('.receipt-result').count(),0);
+for(const url of [`/api/history/${wallet}?toBlock=-1`,`/api/history/${wallet}?toBlock=1.5`,`/api/transaction/${wallet}/bad`]){
+ const r=await page.request.get('http://127.0.0.1:3000'+url);assert.equal(r.status(),400);
+}
+assert.deepEqual(errors,[]);
+console.log('PASS: real mainnet history, older-page search, real receipt decode, invalid hash, API validation, provider failure without fabricated success, mobile layout, no JS errors.');
+await browser.close();

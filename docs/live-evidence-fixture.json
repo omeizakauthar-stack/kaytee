@@ -1,0 +1,12 @@
+{
+  "network": "Mezo Mainnet",
+  "chainId": 31612,
+  "wallet": "0xa7f5dc5955a599524a28dff21389d88c49dbf738",
+  "transactionHash": "0xddfed412e19318050b5a693ec27917ef8c9170e5aa0694843480891e95c3cfa7",
+  "blockNumber": 13164607,
+  "event": "TroveUpdated",
+  "emitter": "0x94AfB503dBca74aC3E4929BACEeDfCe19B93c193",
+  "operation": 2,
+  "expectedKind": "redemption-update",
+  "disclaimer": "Publicly observed mainnet event, not our wallet or transaction. No participant identity is inferred. Read-only diagnostic only; not proof of full redemption, current surplus, or completed recovery. Recent-page membership changes over time; direct receipt lookup is the durable fixture. RPC availability and canonical-chain changes remain possible."
+}

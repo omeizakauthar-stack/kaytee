@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { describeStatus } from '../server/chain.js';
+import { NETWORK, CLAIM_TRANSACTIONS_ENABLED } from '../src/network.js';
+import { EXAMPLES } from '../src/demo.js';
+test('mainnet configuration and locked transactions',()=>{assert.equal(NETWORK.chainId,31612);assert.equal(CLAIM_TRANSACTIONS_ENABLED,false)});
+test('closed loan is not automatically called a redemption',()=>{assert.match(describeStatus(2,'0').title,/owner/);assert.match(describeStatus(3,'0').title,/liquidation/);assert.match(describeStatus(4,'0').title,/redemption/)});
+test('surplus balance is checked independently of status',()=>{for(let s=0;s<5;s++){assert.equal(describeStatus(s,'1').hasSurplus,true);assert.equal(describeStatus(s,'0').hasSurplus,false)}});
+test('active status does not establish partial redemption',()=>{assert.match(describeStatus(1,'0').explanation,/does not establish/)});
+test('unknown status fails to establish cause',()=>{assert.equal(describeStatus(255,'0').recognized,false);assert.match(describeStatus(255,'0').explanation,/Do not assume/)});
+test('all examples are labeled and non-transactional',()=>{for(const data of Object.values(EXAMPLES)){assert.equal(data.mode,'demo');assert.equal(data.transactionEnabled,false);assert.equal(data.address,null);assert.equal(data.blockNumber,null)}});

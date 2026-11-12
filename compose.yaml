@@ -1,0 +1,13 @@
+services:
+  compass:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      ENABLE_MAINNET_CLAIMS: ${ENABLE_MAINNET_CLAIMS:-false}
+      REVIEWED_BORROWER_CODE_HASH: ${REVIEWED_BORROWER_CODE_HASH:-}
+      REVIEWED_TROVE_CODE_HASH: ${REVIEWED_TROVE_CODE_HASH:-}
+      REVIEWED_SURPLUS_CODE_HASH: ${REVIEWED_SURPLUS_CODE_HASH:-}
+    restart: unless-stopped
